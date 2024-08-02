@@ -36,8 +36,8 @@ class Particle:
         
         for i in range(len(self.velocities)):
             inertia =  self.inertia*self.velocities[i] 
-            cognitive = self.acceleration[0]*self.Us[0]*(self.best_positions[i]-self.positions[i])
-            social = self.acceleration[1]*self.Us[1]*(self.best_neighbor_positions - self.positions[i])
+            cognitive = self.accelerations[0]*1*(self.best_positions[i]-self.positions[i])
+            social = self.accelerations[1]*1*(self.best_neighbor_positions[i] - self.positions[i])
 
             self.velocities[i] = inertia + cognitive + social
 
@@ -103,10 +103,12 @@ class Swarm:
 
     def stepAlgorithm(self, normal_data, fraud_data):
         if len(self.lowestCosts) == self.epochTolerance and np.ptp(self.lowestCosts, axis=1) < self.tolerance:
-            return min(self.particles, key = self.particles.cost).positions
+            return min(self.particles, key = lambda k: k.cost).cost
             #return positions with the lowest cost
         
         self.updateBestNeighbors() 
+
+        print(min(self.particles, key = lambda k: k.cost).cost)
 
         newUs = [np.diag(np.random.rand(self.dims)), np.diag(np.random.rand(self.dims))]
 
@@ -115,7 +117,10 @@ class Swarm:
 
             p0 = AutoEncoder(normal_data, 0, self.dims, i.positions)
             p1 = AutoEncoder(fraud_data, 1, self.dims, i.positions)
-            i.stepAlgorithm(p0, p1)
+
+            print(p0, p1)
+
+            i.stepAlgorithm(1-p0[0], p1[0])
 
             if i.cost == 0:
                 return i.positions

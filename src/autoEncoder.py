@@ -7,47 +7,45 @@ from qiskit.compiler import assemble
 from qiskit.circuit.library import RealAmplitudes
 
 def AutoEncoder(data, fraud, num_categories, theta_list) -> tuple:
-    num_trash = 3
-    num_latent = data.num_qubits - num_trash
+    num_trash = 2
+    num_latent = num_categories - num_trash
+    n = data.num_qubits + num_trash + 1
 
-    # print(str(num_latent) + " " + str(num_trash))
+    # print("total number of qubits: " + str(n))
 
-    latent_register = QuantumRegister(num_latent)
-    trash_register = QuantumRegister(num_trash)
-    reference_register = QuantumRegister(num_trash)
-    auxiliary_register = QuantumRegister(1)
+    autoencoder_sz = num_trash * 2 + num_latent + 1
+    auxiliary_qubit = n - 1
+
+    if(autoencoder_sz != 10):   # for safety
+        raise Exception("autoencoder_sz incorrect, got: " + str(autoencoder_sz))
+
+    encoder_circuit = QuantumCircuit(n)
+    encoder_circuit.compose(Ansatz(num_latent, num_trash, theta_list), range(n - autoencoder_sz, n - autoencoder_sz + num_trash + num_latent), inplace=True)
+
+    swap_circuit = QuantumCircuit(n)
+    swap_circuit.h(auxiliary_qubit)
+    for i in range(n - 1 - 2 * num_trash, n - 1 - num_trash):
+        swap_circuit.cswap(auxiliary_qubit, i, i + num_trash)
+    swap_circuit.h(auxiliary_qubit)
+
+    quantum_register = QuantumRegister(n)
     classical_register = ClassicalRegister(1)
-
-    qc = QuantumCircuit(latent_register, trash_register, reference_register, auxiliary_register, classical_register)
-
-    encoder_circuit = QuantumCircuit(latent_register, trash_register)
-    # encoder_circuit.compose(RealAmplitudes(num_latent + num_trash, reps=1), range(num_latent + num_trash), inplace=True)
-    encoder_circuit.compose(Ansatz(num_latent, num_trash, theta_list), range(num_latent + num_trash), inplace=True)
-
-    swap_circuit = QuantumCircuit(latent_register, trash_register, reference_register, auxiliary_register, classical_register)
-
-    swap_circuit.h(auxiliary_register)
-    for i in range(num_trash):
-        swap_circuit.cswap(auxiliary_register, num_latent + i, num_latent + num_trash + i)
-    swap_circuit.h(auxiliary_register)
-
-    qc.compose(data, range(num_latent + num_trash), inplace=True)
+    qc = QuantumCircuit(quantum_register, classical_register)
+    qc.compose(data, range(data.num_qubits), inplace=True)
     qc.barrier()
     qc.compose(encoder_circuit, inplace=True)
     qc.barrier()
     qc.compose(swap_circuit, inplace=True)
     qc.barrier()
-    # qc.measure(auxiliary_register, classical_register)
-    qc.save_density_matrix(qubits=[num_latent + num_trash * 2]) # <== here
-    # qc.measure_all()
+    qc.save_density_matrix(qubits=[auxiliary_qubit])
+
     # print(qc.draw())
 
     simulator = AerSimulator()
     circ = transpile(qc, backend=simulator)
     job = simulator.run(circ)
     state = job.result().data()['density_matrix']
-    # sv = state.to_statevector()
 
-    # print(float(state[0][0]))
+    print("prediction made")
 
     return(float(state[0][0]), fraud)
